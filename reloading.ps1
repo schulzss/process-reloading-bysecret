@@ -89,6 +89,132 @@ if ($result.Count -gt 0) {
     $counter = 1
     
     foreach ($item in $sortedResults) {
+        Write-Host "  ╔══════════════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor DarkCyan
+        
+        Write-Host "  ║ " -NoNewline -ForegroundColor DarkCyan
+        Write-Host "#$counter".PadRight(4) -NoNewline -ForegroundColor White
+        Write-Host "│ " -NoNewline -ForegroundColor DarkGray
+        Write-Host "Processo: " -NoNewline -ForegroundColor White
+        Write-Host "$($item.ProcessName)".PadRight(40) -NoNewline -ForegroundColor Green
+        Write-Host "│ PID: " -NoNewline -ForegroundColor White
+        Write-Host "$($item.PID)".PadRight(15) -NoNewline -ForegroundColor Magenta
+        Write-Host "║" -ForegroundColor DarkCyan
+        
+        Write-Host "  ╟──────────────────────────────────────────────────────────────────────────────────────╢" -ForegroundColor DarkCyan
+        
+        Write-Host "  ║ " -NoNewline -ForegroundColor DarkCyan
+        Write-Host "    │ " -NoNewline -ForegroundColor DarkGray
+        Write-Host "🕐 Iniciado: " -NoNewline -ForegroundColor White
+        Write-Host "$($item.StartTimeFormatted)".PadRight(38) -NoNewline -ForegroundColor Cyan
+        Write-Host "│ ⏱️  Tempo: " -NoNewline -ForegroundColor White
+        Write-Host "$($item.Elapsed)".PadRight(14) -NoNewline -ForegroundColor Yellow
+        Write-Host "║" -ForegroundColor DarkCyan
+        
+        Write-Host "  ╟──────────────────────────────────────────────────────────────────────────────────────╢" -ForegroundColor DarkCyan
+        
+        Write-Host "  ║ " -NoNewline -ForegroundColor DarkCyan
+        Write-Host "    │ " -NoNewline -ForegroundColor DarkGray
+        Write-Host "👤 Usuário:  " -NoNewline -ForegroundColor White
+        Write-Host "$($item.User)".PadRight(70) -NoNewline -ForegroundColor Yellow
+        Write-Host "║" -ForegroundColor DarkCyan
+        
+        Write-Host "  ╟──────────────────────────────────────────────────────────────────────────────────────╢" -ForegroundColor DarkCyan
+        
+        $pathDisplay = $item.ExecutablePath
+        $maxPathLength = 70
+        
+        if ($pathDisplay.Length -le $maxPathLength) {
+            Write-Host "  ║ " -NoNewline -ForegroundColor DarkCyan
+            Write-Host "    │ " -NoNewline -ForegroundColor DarkGray
+            Write-Host "📁 Caminho:  " -NoNewline -ForegroundColor White
+            Write-Host $pathDisplay.PadRight(70) -NoNewline -ForegroundColor DarkGray
+            Write-Host "║" -ForegroundColor DarkCyan
+        } else {
+            Write-Host "  ║ " -NoNewline -ForegroundColor DarkCyan
+            Write-Host "    │ " -NoNewline -ForegroundColor DarkGray
+            Write-Host "📁 Caminho:  " -NoNewline -ForegroundColor White
+            Write-Host $pathDisplay.Substring(0, $maxPathLength).PadRight(70) -NoNewline -ForegroundColor DarkGray
+            Write-Host "║" -ForegroundColor DarkCyan
+            
+            $remainingPath = $pathDisplay.Substring($maxPathLength)
+            while ($remainingPath.Length -gt 0) {
+                $chunk = if ($remainingPath.Length -le $maxPathLength) { 
+                    $remainingPath 
+                } else { 
+                    $remainingPath.Substring(0, $maxPathLength) 
+                }
+                
+                Write-Host "  ║ " -NoNewline -ForegroundColor DarkCyan
+                Write-Host "    │ " -NoNewline -ForegroundColor DarkGray
+                Write-Host "             " -NoNewline
+                Write-Host $chunk.PadRight(70) -NoNewline -ForegroundColor DarkGray
+                Write-Host "║" -ForegroundColor DarkCyan
+                
+                $remainingPath = if ($remainingPath.Length -gt $maxPathLength) {
+                    $remainingPath.Substring($maxPathLength)
+                } else {
+                    ""
+                }
+            }
+        }
+        
+        Write-Host "  ╚══════════════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor DarkCyan
+        Write-Host ""
+        
+        $counter++
+    }
+    
+    Write-Host "  $divider" -ForegroundColor Cyan
+    Write-Host "  ║" -NoNewline -ForegroundColor Cyan
+    Write-Host "  ✅ Total de processos encontrados: $($result.Count)".PadRight(86) -NoNewline -ForegroundColor Green
+    Write-Host "  ║" -ForegroundColor Cyan
+    Write-Host "  $divider" -ForegroundColor Cyan
+} else {
+    Write-Host "  ╔══════════════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Yellow
+    Write-Host "  ║" -NoNewline -ForegroundColor Yellow
+    Write-Host "  ⚠️  Nenhum processo foi iniciado nos últimos $thresholdMinutes minutos.".PadRight(86) -NoNewline -ForegroundColor Yellow
+    Write-Host "  ║" -ForegroundColor Yellow
+    Write-Host "  ╚══════════════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Yellow
+}
+
+Write-Host ""
+Write-Host "  Análise concluída em " -NoNewline -ForegroundColor DarkGray
+Write-Host (Get-Date -Format "dd/MM/yyyy HH:mm:ss") -ForegroundColor Gray
+Write-Host ""GetOwner
+            if ($ownerObj.ReturnValue -eq 0) {
+                $owner = ($ownerObj.Domain + "\" + $ownerObj.User).Trim("\")
+            }
+        } catch {}
+        
+        $elapsed = (Get-Date) - $start
+        
+        $result += [PSCustomObject]@{
+            ProcessName    = $proc.ProcessName
+            PID            = $proc.Id
+            StartTime      = $start
+            StartTimeFormatted = $start.ToString("dd/MM/yyyy HH:mm:ss")
+            Elapsed        = "{0:D2}h {1:D2}m {2:D2}s" -f [int]$elapsed.TotalHours, $elapsed.Minutes, $elapsed.Seconds
+            ExecutablePath = if ($path) { $path } else { "N/A" }
+            User           = if ($owner) { $owner } else { "Desconhecido" }
+        }
+    }
+}
+
+$divider = "═" * 90
+$thinDivider = "─" * 88
+
+Write-Host "  $divider" -ForegroundColor Cyan
+Write-Host "  ║" -NoNewline -ForegroundColor Cyan
+Write-Host "  📊 PROCESSOS INICIADOS NOS ÚLTIMOS $thresholdMinutes MINUTOS".PadRight(86) -NoNewline -ForegroundColor Yellow
+Write-Host "  ║" -ForegroundColor Cyan
+Write-Host "  $divider" -ForegroundColor Cyan
+Write-Host ""
+
+if ($result.Count -gt 0) {
+    $sortedResults = $result | Sort-Object StartTime -Descending
+    $counter = 1
+    
+    foreach ($item in $sortedResults) {
         $boxTop = "  ╔" + ("═" * 86) + "╗"
         $boxBottom = "  ╚" + ("═" * 86) + "╝"
         $boxMid = "  ╟" + ("─" * 86) + "╢"
