@@ -1,0 +1,122 @@
+Write-Host "=== DETECÇÃO COMPLETA DE SECURE BOOT ===" -ForegroundColor Cyan
+
+$result = [ordered]@{
+    "UEFI Firmware"                = $null
+    "Modo de Boot (FirmwareType)"  = $null
+    "Secure Boot (Confirm-SecureBootUEFI)" = $null
+    "Secure Boot (Registro)"       = $null
+    "Secure Boot (WMI)"            = $null
+    "Secure Boot (EventLog)"       = $null
+}
+
+# --------------------------------------------------------
+# 1. Verificar UEFI x BIOS pelo Registro
+# --------------------------------------------------------
+try {
+    $fw = (Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control").PEFirmwareType
+    switch ($fw) {
+        1 { $result["Modo de Boot (FirmwareType)"] = "Legacy BIOS (Secure Boot impossível)" }
+        2 { $result["Modo de Boot (FirmwareType)"] = "UEFI" }
+        default { $result["Modo de Boot (FirmwareType)"] = "Desconhecido: $fw" }
+    }
+}
+catch {
+    $result["Modo de Boot (FirmwareType)"] = "Erro ao consultar"
+}
+
+# --------------------------------------------------------
+# 2. Confirm-SecureBootUEFI
+# --------------------------------------------------------
+try {
+    $sb = Confirm-SecureBootUEFI -ErrorAction Stop
+    $result["Secure Boot (Confirm-SecureBootUEFI)"] = if ($sb) { "Ativado" } else { "Desativado" }
+}
+catch {
+    $result["Secure Boot (Confirm-SecureBootUEFI)"] = "Não suportado (provável BIOS Legacy)"
+}
+
+# --------------------------------------------------------
+# 3. Secure Boot via Registro UEFI
+# --------------------------------------------------------
+try {
+    $regSB = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\State" -ErrorAction Stop
+    if ($regSB.UEFISecureBootEnabled -eq 1) {
+        $result["Secure Boot (Registro)"] = "Ativado"
+    } elseif ($regSB.UEFISecureBootEnabled -eq 0) {
+        $result["Secure Boot (Registro)"] = "Desativado"
+    } else {
+        $result["Secure Boot (Registro)"] = "Valor desconhecido"
+    }
+}
+catch {
+    $result["Secure Boot (Registro)"] = "Chave não encontrada (BIOS Legacy ou Secure Boot não existe)"
+}
+
+# --------------------------------------------------------
+# 4. Secure Boot via WMI
+# --------------------------------------------------------
+try {
+    $wmi = Get-CimInstance -Namespace root\Microsoft\Windows\HardwareManagement -ClassName MS_SecureBoot -ErrorAction Stop
+    if ($wmi.SecureBootEnabled -eq $true) {
+        $result["Secure Boot (WMI)"] = "Ativado"
+    } elseif ($wmi.SecureBootEnabled -eq $false) {
+        $result["Secure Boot (WMI)"] = "Desativado"
+    }
+}
+catch {
+    $result["Secure Boot (WMI)"] = "Não suportado (provável BIOS Legacy)"
+}
+
+# --------------------------------------------------------
+# 5. EventLog — procurar todos eventos relacionados
+# --------------------------------------------------------
+try {
+    $events = Get-WinEvent -LogName "Microsoft-Windows-Kernel-Boot/Operational" |
+              Where-Object { $_.Message -match "Secure Boot" } |
+              Select-Object -First 1
+
+    if ($events -eq $null) {
+        $result["Secure Boot (EventLog)"] = "Nenhum evento encontrado (log desativado ou BIOS Legacy)"
+    }
+    else {
+        if ($events.Message -match "Enabled|On") {
+            $result["Secure Boot (EventLog)"] = "Ativado"
+        }
+        elseif ($events.Message -match "Disabled|Off") {
+            $result["Secure Boot (EventLog)"] = "Desativado"
+        }
+        else {
+            $result["Secure Boot (EventLog)"] = "Encontrado mas inconclusivo"
+        }
+    }
+}
+catch {
+    $result["Secure Boot (EventLog)"] = "Erro ao ler o log"
+}
+
+# --------------------------------------------------------
+# Resultado Final (análise inteligente)
+# --------------------------------------------------------
+Write-Host "`n=== RESULTADO INDIVIDUAL ===" -ForegroundColor Yellow
+$result.GetEnumerator() | ForEach-Object {
+    Write-Host ("{0}: {1}" -f $_.Key, $_.Value)
+}
+
+Write-Host "`n=== STATUS FINAL ===" -ForegroundColor Green
+
+$ativo = $result.Values -contains "Ativado"
+$desativado = $result.Values -contains "Desativado"
+$bios = ($result.Values -contains "Legacy BIOS (Secure Boot impossível)") -or ($result.Values -contains "Não suportado (provável BIOS Legacy)")
+
+if ($ativo) {
+    Write-Host "Secure Boot está: ATIVADO" -ForegroundColor Green
+}
+elseif ($desativado) {
+    Write-Host "Secure Boot está: DESATIVADO" -ForegroundColor Red
+}
+elseif ($bios) {
+    Write-Host "Secure Boot não existe porque o sistema está em BIOS Legacy." -ForegroundColor Red
+}
+else {
+    Write-Host "Não foi possível determinar com 100% de certeza." -ForegroundColor Yellow
+}
