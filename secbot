@@ -1,5 +1,3 @@
-Write-Host "=== DETECÇÃO COMPLETA DE SECURE BOOT ===" -ForegroundColor Cyan
-
 $result = [ordered]@{
     "UEFI Firmware"                = $null
     "Modo de Boot (FirmwareType)"  = $null
@@ -9,9 +7,6 @@ $result = [ordered]@{
     "Secure Boot (EventLog)"       = $null
 }
 
-# --------------------------------------------------------
-# 1. Verificar UEFI x BIOS pelo Registro
-# --------------------------------------------------------
 try {
     $fw = (Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control").PEFirmwareType
     switch ($fw) {
@@ -24,9 +19,6 @@ catch {
     $result["Modo de Boot (FirmwareType)"] = "Erro ao consultar"
 }
 
-# --------------------------------------------------------
-# 2. Confirm-SecureBootUEFI
-# --------------------------------------------------------
 try {
     $sb = Confirm-SecureBootUEFI -ErrorAction Stop
     $result["Secure Boot (Confirm-SecureBootUEFI)"] = if ($sb) { "Ativado" } else { "Desativado" }
@@ -35,9 +27,6 @@ catch {
     $result["Secure Boot (Confirm-SecureBootUEFI)"] = "Não suportado (provável BIOS Legacy)"
 }
 
-# --------------------------------------------------------
-# 3. Secure Boot via Registro UEFI
-# --------------------------------------------------------
 try {
     $regSB = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\State" -ErrorAction Stop
     if ($regSB.UEFISecureBootEnabled -eq 1) {
@@ -52,9 +41,6 @@ catch {
     $result["Secure Boot (Registro)"] = "Chave não encontrada (BIOS Legacy ou Secure Boot não existe)"
 }
 
-# --------------------------------------------------------
-# 4. Secure Boot via WMI
-# --------------------------------------------------------
 try {
     $wmi = Get-CimInstance -Namespace root\Microsoft\Windows\HardwareManagement -ClassName MS_SecureBoot -ErrorAction Stop
     if ($wmi.SecureBootEnabled -eq $true) {
@@ -67,9 +53,6 @@ catch {
     $result["Secure Boot (WMI)"] = "Não suportado (provável BIOS Legacy)"
 }
 
-# --------------------------------------------------------
-# 5. EventLog — procurar todos eventos relacionados
-# --------------------------------------------------------
 try {
     $events = Get-WinEvent -LogName "Microsoft-Windows-Kernel-Boot/Operational" |
               Where-Object { $_.Message -match "Secure Boot" } |
@@ -94,15 +77,12 @@ catch {
     $result["Secure Boot (EventLog)"] = "Erro ao ler o log"
 }
 
-# --------------------------------------------------------
-# Resultado Final (análise inteligente)
-# --------------------------------------------------------
-Write-Host "`n=== RESULTADO INDIVIDUAL ===" -ForegroundColor Yellow
+Write-Host "`n result" -ForegroundColor Yellow
 $result.GetEnumerator() | ForEach-Object {
     Write-Host ("{0}: {1}" -f $_.Key, $_.Value)
 }
 
-Write-Host "`n=== STATUS FINAL ===" -ForegroundColor Green
+Write-Host "`n STATUS " -ForegroundColor Green
 
 $ativo = $result.Values -contains "Ativado"
 $desativado = $result.Values -contains "Desativado"
